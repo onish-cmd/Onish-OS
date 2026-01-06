@@ -3,7 +3,6 @@ on: [push]
 
 jobs:
   build_os:
-    # Use 24.04 as it has slightly better storage management than 22.04
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -18,7 +17,6 @@ jobs:
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
-          
 
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -32,16 +30,28 @@ jobs:
           fakeroot genext2fs mtools rsync dosfstools expect
           pip3 install jinja2 setuptools
 
+      # --- RUST INIT BUILD (THE MISSING STEP) ---
+      - name: Build Rust Init
+        run: |
+          rustup target add riscv64gc-unknown-linux-gnu
+          # Build your init as a static binary
+          cargo build --release --target riscv64gc-unknown-linux-gnu -p init
+          
+          # Create the overlay structure
+          mkdir -p overlay/sbin
+          cp target/riscv64gc-unknown-linux-gnu/release/init overlay/sbin/init
+          chmod +x overlay/sbin/init
+
+      # --- FULL OS BUILD ---
       - name: Build Full OS (${{ matrix.target }})
         run: |
-          # Shallow clone to save space
           git clone https://github.com/milkv-duo/duo-buildroot-sdk.git --depth=1
           cd duo-buildroot-sdk
           git clone https://github.com/milkv-duo/host-tools.git --depth=1
           
           CONF="buildroot-2021.05/configs/milkv-duo_musl_riscv64_defconfig"
           
-          # 1. Common Settings
+          # 1. Inject the Rust Overlay (Points to the 'overlay' folder we just made)
           echo "BR2_ROOTFS_OVERLAY=\"$(pwd)/../overlay\"" >> $CONF
           
           # 2. Target Specific Settings
@@ -50,7 +60,6 @@ jobs:
             echo 'BR2_TARGET_UBOOT_BOARD_DEFCONFIG="qemu-riscv64_smode"' >> $CONF
           fi
           
-          # Build the image
           ./build.sh milkv-duo-sd
 
       - name: Upload Artifacts
@@ -61,4 +70,3 @@ jobs:
             **/out/*.img
             **/vmlinux
             **/Image
-            
