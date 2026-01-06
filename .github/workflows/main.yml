@@ -1,9 +1,14 @@
-name: Build Onish-OS Full
+name: Build Onish-OS v0.5
 on: [push]
 
 jobs:
-  build:
+  build_os:
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        # This creates two parallel builds at once!
+        target: [hardware, qemu]
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -17,58 +22,33 @@ jobs:
           fakeroot genext2fs mtools rsync dosfstools expect
           pip3 install jinja2
 
-      - name: Build Rust Init (Workspace Mode)
+      - name: Build Full OS (${{ matrix.target }})
         run: |
-          rustup target add riscv64gc-unknown-linux-gnu
-          # Build specifically the init crate as a static binary
-          cargo build --release --target riscv64gc-unknown-linux-gnu -p init
-          
-          # Create the overlay structure
-          mkdir -p overlay/sbin
-          mkdir -p overlay/bin
-          
-          # Move your init to the system path
-          cp target/riscv64gc-unknown-linux-gnu/release/init overlay/sbin/init
-          chmod +x overlay/sbin/init
-
-      - name: Build Full OS Image
-        run: |
-          # 1. Clone the SDK (Pinned to Duo-SD version)
           git clone https://github.com/milkv-duo/duo-buildroot-sdk.git --depth=1
           cd duo-buildroot-sdk
-          
-          # 2. Add the host-tools (Compilers)
           git clone https://github.com/milkv-duo/host-tools.git --depth=1
           
-          # 3. CONFIGURE FOR "EVERYTHING"
-          # We use the musl config but force it to include GNU tools
           CONF="buildroot-2021.05/configs/milkv-duo_musl_riscv64_defconfig"
           
-          echo "BR2_PACKAGE_BASH=y" >> $CONF
-          echo "BR2_PACKAGE_COREUTILS=y" >> $CONF
-          echo "BR2_PACKAGE_PROCPS_NG=y" >> $CONF # Gives you 'ps', 'top', etc.
-          echo 'BR2_TARGET_UBOOT_BOARD_DEFCONFIG="qemu-riscv64_smode"' >> $CONF
-          echo 'BR2_TARGET_UBOOT=y' >> $CONF
-          
-          # 4. Inject the Rust Overlay
-          # This tells Buildroot to merge your 'overlay' folder into the OS
+          # 1. Common Settings
           echo "BR2_ROOTFS_OVERLAY=\"$(pwd)/../overlay\"" >> $CONF
-
-          # 5. Build! (Infinite time is our friend here)
+          
+          # 2. Target Specific Settings
+          if [ "${{ matrix.target }}" == "qemu" ]; then
+            echo 'BR2_TARGET_UBOOT=y' >> $CONF
+            echo 'BR2_TARGET_UBOOT_BOARD_DEFCONFIG="qemu-riscv64_smode"' >> $CONF
+          fi
+          
           ./build.sh milkv-duo-sd
 
-      - name: Upload Kernel Artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: onish-os-v0.4-kernel-pack
+          # This names your files "onish-os-v5-hardware-build-12"
+          name: onish-os-v5-${{ matrix.target }}-build-${{ github.run_number }}
           path: |
-            buildroot/output/images/Image
-            buildroot/output/images/vmlinux
-            buildroot/output/images/boot.sd
+            **/out/*.img
+            **/vmlinux
+            **/Image
             
-      - name: Upload SD Image
-        uses: actions/upload-artifact@v4
-        with:
-          name: Onish-OS-SD-Image
-          path: duo-buildroot-sdk/out/*.img
           
