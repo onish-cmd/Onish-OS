@@ -10,20 +10,15 @@ jobs:
         target: [hardware, qemu]
     
     steps:
-      - name: Free Disk Space (Aggressive)
-        run: |
-          # Remove massive pre-installed tools we don't need for OS building
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      - name: Maximize Build Space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
           
-          # Clean up apt cache
-          sudo apt-get clean
-          
-          # Show final available space
-          df -h
 
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -32,10 +27,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config build-essential ninja-build automake autoconf \
-          libtool wget curl git gcc libssl-dev bc slib squashfs-tools jq python3-distutils \
+          libtool wget curl git gcc libssl-dev bc slib squashfs-tools jq \
           scons parallel tree device-tree-compiler python3-pip python3-setuptools \
           fakeroot genext2fs mtools rsync dosfstools expect
-          pip3 install jinja2
+          pip3 install jinja2 setuptools
 
       - name: Build Full OS (${{ matrix.target }})
         run: |
