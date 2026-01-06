@@ -1,0 +1,10 @@
+[package]
+name = "init"
+
+[[bin]]
+name = "init"
+path = "src/init.rs"
+
+[dependencies]
+os_utils = {path = "OS-Utils}
+sc = "0.2"
