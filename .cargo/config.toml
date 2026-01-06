@@ -1,0 +1,6 @@
+[target.riscv64gc-unknown-linux-gnu]
+linker = "rust-lld"
+rustflags = [
+    "-C", "link-arg=-nostartfiles",
+    "-C", "link-arg=-static",
+]
