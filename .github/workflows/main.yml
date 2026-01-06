@@ -3,13 +3,28 @@ on: [push]
 
 jobs:
   build_os:
-    runs-on: ubuntu-22.04
+    # Use 24.04 as it has slightly better storage management than 22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        # This creates two parallel builds at once!
         target: [hardware, qemu]
     
     steps:
+      - name: Free Disk Space (Aggressive)
+        run: |
+          # Remove massive pre-installed tools we don't need for OS building
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          
+          # Clean up apt cache
+          sudo apt-get clean
+          
+          # Show final available space
+          df -h
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -24,6 +39,7 @@ jobs:
 
       - name: Build Full OS (${{ matrix.target }})
         run: |
+          # Shallow clone to save space
           git clone https://github.com/milkv-duo/duo-buildroot-sdk.git --depth=1
           cd duo-buildroot-sdk
           git clone https://github.com/milkv-duo/host-tools.git --depth=1
@@ -39,16 +55,15 @@ jobs:
             echo 'BR2_TARGET_UBOOT_BOARD_DEFCONFIG="qemu-riscv64_smode"' >> $CONF
           fi
           
+          # Build the image
           ./build.sh milkv-duo-sd
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          # This names your files "onish-os-v5-hardware-build-12"
           name: onish-os-v5-${{ matrix.target }}-build-${{ github.run_number }}
           path: |
             **/out/*.img
             **/vmlinux
             **/Image
             
-          
