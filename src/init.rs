@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use core::panic::PanicInfo;
+use core::panic::PanicInfo; // DO NOT REMOVE THIS BECAUSE OF TESTS
 extern crate os_utils;
 extern crate sc;
 
@@ -24,6 +24,7 @@ pub extern "C" fn _start() -> ! {
     loop {}
 }
 
+#[cfg(not(test))] //added to pass tests
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     loop {}
