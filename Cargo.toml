@@ -6,5 +6,11 @@ name = "init"
 path = "src/init.rs"
 
 [dependencies]
-os_utils = {path = "OS-Utils}
+os_utils = {path = "OS-Utils"}
 sc = "0.2"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
