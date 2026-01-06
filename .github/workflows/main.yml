@@ -47,8 +47,8 @@ jobs:
           echo "BR2_PACKAGE_BASH=y" >> $CONF
           echo "BR2_PACKAGE_COREUTILS=y" >> $CONF
           echo "BR2_PACKAGE_PROCPS_NG=y" >> $CONF # Gives you 'ps', 'top', etc.
-          echo "BR2_TARGET_UBOOT_BOARD_DEFCONFIG="qemu-riscv64_smode" >> $CONF
-          echo "BR2_TARGET_UBOOT=y" >> $CONF
+          echo 'BR2_TARGET_UBOOT_BOARD_DEFCONFIG="qemu-riscv64_smode"' >> $CONF
+          echo 'BR2_TARGET_UBOOT=y' >> $CONF
           
           # 4. Inject the Rust Overlay
           # This tells Buildroot to merge your 'overlay' folder into the OS
