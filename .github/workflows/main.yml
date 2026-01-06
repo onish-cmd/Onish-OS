@@ -56,6 +56,15 @@ jobs:
           # 5. Build! (Infinite time is our friend here)
           ./build.sh milkv-duo-sd
 
+      - name: Upload Kernel Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: onish-os-v0.4-kernel-pack
+          path: |
+            buildroot/output/images/Image
+            buildroot/output/images/vmlinux
+            buildroot/output/images/boot.sd
+            
       - name: Upload SD Image
         uses: actions/upload-artifact@v4
         with:
