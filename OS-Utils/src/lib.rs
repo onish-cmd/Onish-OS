@@ -31,3 +31,11 @@ pub fn mount(source: &str, target: &str, fstype: &str) {
         );
     }
 }
+
+pub fn fork() -> usize {
+    unsafe {sc::syscall2(220, 17, 0)}
+}
+
+pub fn wait4child() {
+    unsafe {sc::syscall4(260, -1isize as usize, 0, 0, 0)};
+}

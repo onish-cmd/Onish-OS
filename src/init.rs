@@ -15,20 +15,27 @@ pub extern "C" fn _start() -> ! {
     os_utils::mount("sysfs\0", "/sys\0", "sysfs\0");
     os_utils::print("[ OK ] FILESYSTEMS MOUNTED\n");
     os_utils::print("Welcome to Onish-OS\n");
+    os_utils::print("--VERSION 0.6--\n");
 
     // START BASH
-    let cmd = "/bin/bash\0";
-    let argv: [*const u8; 2] = [cmd.as_ptr(), core::ptr::null()];
+    let pid = os_utils::fork();
 
-    unsafe {
-        sc::syscall3(
-            221,
-            cmd.as_ptr() as usize,
+    if pid == 0 {
+        let cmd = "/bin/sh\0";
+        let argv: [*const u8; 2] = [cmd.as_ptr(), core::ptr::null()];
+        let envp: [*const u8; 1] = [core::ptr::null()];
+        unsafe {
+            sc::syscall3(221, cmd.as_ptr() as usize,
             argv.as_ptr() as usize,
-            0
-        );
+            envp.as_ptr() as usize);
+        }
+        os_utils::print("Failed to start Bash");
+        os_utils::suicide(93)
+    } else {
+        os_utils::wait4child();
+        os_utils::print("You have been saved from soft lock.");
+        os_utils::suicide(93)
     }
-    loop {}
 }
 
 #[cfg(not(test))] //added to pass tests
