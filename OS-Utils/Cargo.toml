@@ -4,3 +4,6 @@ name = "os_utils"
 [lib]
 name = "os_utils"
 path = "src/lib.rs"
+
+[dependencies]
+sc = "0.2"

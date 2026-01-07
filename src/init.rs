@@ -11,14 +11,14 @@ extern crate sc;
 pub extern "C" fn _start() -> ! {
     os_utils::print("Welcome to Onish-OS");
 
-    let cmd = "bin/bash\0";
+    let cmd = "/bin/bash\0";
 
     unsafe {
         sc::syscall3(
-            sc::nr::EXECVE,
+            221,
             cmd.as_ptr() as usize,
             0,
-            0,
+            0
         );
     }
     loop {}
