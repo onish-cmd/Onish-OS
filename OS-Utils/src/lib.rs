@@ -1,5 +1,13 @@
-#![no_std]
 extern crate sc;
+use std::io::{self, Write};
+
+pub fn input(prompt: &str) -> String {
+    print!("{}", prompt);
+    io::stdout().flush().expect("Flush Failed!");
+    let mut user_input = String::new();
+    io::stdin().read_line(&mut user_input).expect("Read Failed!");
+    return user_input.trim().to_string();
+}
 
 pub fn print(prompt: &str) {
     unsafe {
@@ -46,5 +54,34 @@ pub fn attach_console() {
         sc::syscall3(24, fd, 0, 0);
         sc::syscall3(24, fd, 1, 0);
         sc::syscall3(24, fd, 2, 0);
+    }
+}
+
+// The "Safety Keys" for the Linux Kernel
+const LINUX_REBOOT_MAGIC1: usize = 0xfee1dead;
+const LINUX_REBOOT_MAGIC2: usize = 0x28121969;
+
+// Command Codes
+const LINUX_REBOOT_CMD_POWER_OFF: usize = 0x4321fedc;
+const LINUX_REBOOT_CMD_RESTART: usize = 0x01234567;
+
+pub fn reboot() {
+    println!("Rebooting");
+    unsafe {
+        sc::syscall4(142, 
+        LINUX_REBOOT_MAGIC1, 
+        LINUX_REBOOT_MAGIC2, 
+        LINUX_REBOOT_CMD_RESTART, 
+        0);
+    }
+}
+pub fn shutdown() {
+    println!("Shuting Down");
+    unsafe {
+        sc::syscall4(142, 
+        LINUX_REBOOT_MAGIC1, 
+        LINUX_REBOOT_MAGIC2, 
+        LINUX_REBOOT_CMD_POWER_OFF, 
+        0);
     }
 }

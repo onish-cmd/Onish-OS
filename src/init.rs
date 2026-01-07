@@ -1,7 +1,6 @@
-#![no_std]
-#![no_main]
+use std::io::{self, Write};
 
-use core::panic::PanicInfo;
+use os_utils;
 extern crate os_utils;
 extern crate sc;
 
@@ -33,15 +32,13 @@ pub extern "C" fn _start() -> ! {
         os_utils::print("Failed to start Bash");
         os_utils::suicide(93)
     } else {
+        // ask user if they want to reboot or shutdown.
         os_utils::wait4child();
-        os_utils::print("You have been saved from soft lock.");
-        os_utils::suicide(93)
+        ans = os_utils::input("Do you want to reboot or shutdown?");
+        if ans.to_lowercase() == "reboot" {
+            os_utils::reboot();
+        } else {
+            os_utils::shutdown();
+        }
     }
-}
-
-#[cfg(not(test))] //added to pass tests
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    os_utils::print("INIT PANIC!!!");
-    os_utils::suicide(93);
 }

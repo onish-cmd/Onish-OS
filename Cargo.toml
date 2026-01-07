@@ -11,6 +11,8 @@ sc = "0.2"
 
 [profile.dev]
 panic = "abort"
+strip = "true"
 
 [profile.release]
 panic = "abort"
+strip = "true"
