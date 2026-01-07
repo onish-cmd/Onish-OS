@@ -34,7 +34,7 @@ pub extern "C" fn _start() -> ! {
     } else {
         // ask user if they want to reboot or shutdown.
         os_utils::wait4child();
-        ans = os_utils::input("Do you want to reboot or shutdown?");
+        let ans = os_utils::input("Do you want to reboot or shutdown?");
         if ans.to_lowercase() == "reboot" {
             os_utils::reboot();
         } else {

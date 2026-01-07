@@ -10,9 +10,7 @@ os_utils = {path = "OS-Utils"}
 sc = "0.2"
 
 [profile.dev]
-panic = "abort"
-strip = "true"
+strip = "symbols"
 
 [profile.release]
-panic = "abort"
-strip = "true"
+strip = "symbols"
