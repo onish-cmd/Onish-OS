@@ -1,4 +1,4 @@
-name: Build Onish-OS v0.5
+name: Build Onish-OS v0.7
 on: [push]
 
 jobs:
@@ -26,17 +26,24 @@ jobs:
           sudo apt-get install -y pkg-config build-essential ninja-build automake autoconf \
           libtool wget curl git gcc libssl-dev bc squashfs-tools jq scons parallel tree \
           device-tree-compiler python3-pip python3-setuptools fakeroot genext2fs mtools \
-          rsync dosfstools expect bison flex libncurses-dev u-boot-tools vim-common unzip
-          
+          rsync dosfstools expect bison flex libncurses-dev u-boot-tools vim-common unzip \
+          gcc-riscv64-linux-gnu # THIS IS THE CRITICAL CROSS-LINKER
+
           pip3 install jinja2 setuptools
 
       - name: Build Rust Init
         run: |
+          # 1. Add the RISC-V Musl target to Rust
           rustup target add riscv64gc-unknown-linux-musl
+          
+          # 2. Build with the correct Cross-Linker for RISC-V
+          # We force crt-static to ensure the Musl C library is bundled inside the binary
+          CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-linux-gnu-gcc \
+          RUSTFLAGS="-C target-feature=+crt-static" \
           cargo build --release --target riscv64gc-unknown-linux-musl -p init
-          mkdir -p overlay/sbin
-          mkdir -p overlay/sbin overlay/proc overlay/sys overlay/dev overlay/dev/pts overlay/tmp
-          cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
+          
+          # 3. Create RootFS Overlay
+          mkdir -p overlay/sbin overlay/proc overlay/sys overlay/dev overlay/tmp
           cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
           chmod +x overlay/sbin/init
 
@@ -53,6 +60,8 @@ jobs:
             make qemu_riscv64_virt_defconfig
             echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> .config
             echo 'BR2_TARGET_GENERIC_GETTY_PORT="ttyS0"' >> .config
+            # Ensure buildroot knows we are using a custom init
+            echo 'BR2_INIT_NONE=y' >> .config 
             make olddefconfig
             make -j$(nproc)
             cp output/images/Image "$OUTPUT_DIR/"
@@ -76,13 +85,12 @@ jobs:
             # 1. Copy the .img file
             cp out/*.img "$OUTPUT_DIR/"
             
-            # 2. Find and copy the vmlinux file (searching subdirectories)
-            # This handles cases where vmlinux is in buildroot-2021.05/output/images/
+            # 2. Find and copy the vmlinux file
             find . -name "vmlinux" -type f -exec cp {} "$OUTPUT_DIR/" \;
           fi
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: onish-os-v5-${{ matrix.target }}
+          name: onish-os-v7-${{ matrix.target }}
           path: out/
