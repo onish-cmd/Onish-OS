@@ -1,4 +1,3 @@
-use std::io::{self, Write};
 extern crate os_utils;
 extern crate sc;
 
