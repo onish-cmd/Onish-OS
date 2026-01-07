@@ -39,3 +39,12 @@ pub fn fork() -> usize {
 pub fn wait4child() {
     unsafe {sc::syscall4(260, -1isize as usize, 0, 0, 0)};
 }
+
+pub fn attach_console() {
+    unsafe {
+        let fd = sc::syscall4(56, -100isize as usize, "/dev/console\0".as_ptr() as usize, 2, 0);
+        sc::syscall3(24, fd, 0, 0);
+        sc::syscall3(24, fd, 1, 0);
+        sc::syscall3(24, fd, 2, 0);
+    }
+}

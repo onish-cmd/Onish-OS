@@ -18,6 +18,7 @@ pub extern "C" fn _start() -> ! {
     os_utils::print("--VERSION 0.6--\n");
 
     // START BASH
+    os_utils::attach_console();
     let pid = os_utils::fork();
 
     if pid == 0 {
