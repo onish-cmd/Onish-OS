@@ -36,8 +36,8 @@ jobs:
           cargo build --release --target riscv64gc-unknown-linux-musl -p init
           mkdir -p overlay/sbin
           mkdir -p overlay/sbin overlay/proc overlay/sys overlay/dev overlay/dev/pts overlay/tmp
-          cp target/riscv64gc-unknown-linux-gnu/release/init overlay/sbin/init
-          cp target/riscv64gc-unknown-linux-gnu/release/init overlay/sbin/init
+          cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
+          cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
           chmod +x overlay/sbin/init
 
       - name: Build Full OS
