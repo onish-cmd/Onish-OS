@@ -33,7 +33,7 @@ jobs:
       - name: Build Rust Init
         run: |
           rustup target add riscv64gc-unknown-linux-musl
-          cargo build --release --target riscv64gc-unknown-linux-must -p init
+          cargo build --release --target riscv64gc-unknown-linux-musl -p init
           mkdir -p overlay/sbin
           mkdir -p overlay/sbin overlay/proc overlay/sys overlay/dev overlay/dev/pts overlay/tmp
           cp target/riscv64gc-unknown-linux-gnu/release/init overlay/sbin/init
