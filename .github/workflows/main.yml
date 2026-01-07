@@ -35,6 +35,8 @@ jobs:
           rustup target add riscv64gc-unknown-linux-gnu
           cargo build --release --target riscv64gc-unknown-linux-gnu -p init
           mkdir -p overlay/sbin
+          mkdir -p overlay/sbin overlay/proc overlay/sys overlay/dev overlay/dev/pts overlay/tmp
+          cp target/riscv64gc-unknown-linux-gnu/release/init overlay/sbin/init
           cp target/riscv64gc-unknown-linux-gnu/release/init overlay/sbin/init
           chmod +x overlay/sbin/init
 

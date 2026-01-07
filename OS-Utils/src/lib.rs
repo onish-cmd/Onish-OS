@@ -11,3 +11,23 @@ pub fn print(prompt: &str) {
         );
     }
 }
+
+pub fn suicide(code: usize) -> ! {
+    unsafe{
+        sc::syscall1(93, code);
+    }
+    loop{}
+}
+
+pub fn mount(source: &str, target: &str, fstype: &str) {
+    unsafe{
+        sc::syscall5(
+            40,
+            source.as_ptr() as usize,
+            target.as_ptr() as usize,
+            fstype.as_ptr() as usize,
+            0,
+            0
+        );
+    }
+}
