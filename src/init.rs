@@ -1,13 +1,10 @@
 use std::io::{self, Write};
-
-use os_utils;
 extern crate os_utils;
 extern crate sc;
 
 // CAUTION: DO NOT EDIT ANY OF THIS FILE AND RECOMPILE UNLESS YOU HAVE TO!
 
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
+fn main() {
     // Mounts + Greetings
     os_utils::mount("proc\0", "/proc\0", "proc\0");
     os_utils::mount("devtmpfs\0", "/dev\0", "devtmpfs\0");
