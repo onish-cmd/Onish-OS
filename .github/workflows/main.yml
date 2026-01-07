@@ -40,7 +40,7 @@ jobs:
 
       - name: Build Full OS
         run: |
-          # Define absolute path for the artifacts
+          # Create absolute path for artifacts
           OUTPUT_DIR="${{ github.workspace }}/out"
           mkdir -p "$OUTPUT_DIR"
 
@@ -49,15 +49,10 @@ jobs:
             git clone https://github.com/buildroot/buildroot.git --depth=1 --branch=2024.02.x
             cd buildroot
             make qemu_riscv64_virt_defconfig
-            
-            # Use absolute path for the overlay
             echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> .config
             echo 'BR2_TARGET_GENERIC_GETTY_PORT="ttyS0"' >> .config
-            
             make olddefconfig
             make -j$(nproc)
-            
-            # Copy to absolute output directory
             cp output/images/Image "$OUTPUT_DIR/"
             cp output/images/rootfs.ext2 "$OUTPUT_DIR/"
           else
@@ -66,7 +61,7 @@ jobs:
             cd duo-buildroot-sdk
             git clone https://github.com/milkv-duo/host-tools.git --depth=1
             
-            # Fix DTC path for SDK
+            # Map system dtc
             mkdir -p host-tools/gcc/riscv64-linux-musl-x86_64/bin
             sudo ln -sf /usr/bin/dtc host-tools/gcc/riscv64-linux-musl-x86_64/bin/dtc
 
@@ -76,13 +71,16 @@ jobs:
             export BR2_JLEVEL=2
             ./build.sh milkv-duo-sd
             
-            # Copy hardware artifacts using wildcards for the timestamped filenames
+            # 1. Copy the .img file
             cp out/*.img "$OUTPUT_DIR/"
-            cp out/vmlinux "$OUTPUT_DIR/"
+            
+            # 2. Find and copy the vmlinux file (searching subdirectories)
+            # This handles cases where vmlinux is in buildroot-2021.05/output/images/
+            find . -name "vmlinux" -type f -exec cp {} "$OUTPUT_DIR/" \;
           fi
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: onish-os-v0p5-${{ matrix.target }}
+          name: onish-os-v5-${{ matrix.target }}
           path: out/
