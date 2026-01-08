@@ -18,8 +18,11 @@ fn main() {
     let shells = ["/usr/bin/bash", "/bin/bash", "/bin/sh", "/usr/bin/sh"];
     for path in shells {
         if std::path::Path::new(path).exists() {
+            println!("DEBUG: Checking if {} exists", path);
             shell_path = path;
             break;
+        } else {
+            println!("DEBUG: {} 404 Not found", path)
         }
     }
 
@@ -54,8 +57,8 @@ fn main() {
                     // This blocks the child until you type 'exit' in Bash.
                     proc.wait().expect("Bash crashed");
                 }
-                Err(_) => {
-                    os_utils::print("FATAL: /bin/sh not found in RootFS\n");
+                Err(e) => {
+                    println!("FATAL: {} failed to run Error: {} \n", shell_path, e);
                 }
             }
             // If Bash ends, this child process MUST die or it will try to act like PID 1.
