@@ -30,7 +30,7 @@ fn main() {
 
             // Launching Bash as a 'Login Shell' (-l).
             // This triggers /etc/profile which we will use to fix the network.
-            let child = Command::new("/bin/bash")
+            let child = Command::new("/bin/sh")
                 .arg("-l")
                 .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
                 .env("TERM", "xterm")
@@ -42,7 +42,7 @@ fn main() {
                     proc.wait().expect("Bash crashed");
                 }
                 Err(_) => {
-                    os_utils::print("FATAL: /bin/bash not found in RootFS\n");
+                    os_utils::print("FATAL: /bin/sh not found in RootFS\n");
                 }
             }
             // If Bash ends, this child process MUST die or it will try to act like PID 1.
@@ -70,4 +70,4 @@ fn main() {
             os_utils::print("Restarting session...\n");
         }
     }
-}
+} // Is my english good? 

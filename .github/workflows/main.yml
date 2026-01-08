@@ -90,6 +90,7 @@ jobs:
             echo 'BR2_TARGET_GENERIC_GETTY_PORT="ttyS0"' >> .config
             echo 'BR2_INIT_NONE=y' >> .config 
             echo 'BR2_PACKAGE_BASH=y' >> .config
+            echo 'BR2_SYSTEM_BIN_SH_BASH=y' >> .config
             
             make olddefconfig
             make -j$(nproc)
@@ -109,6 +110,7 @@ jobs:
             # Inject Onish-OS Settings into Hardware Defconfig
             echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> $CONF
             echo "BR2_PACKAGE_BASH=y" >> $CONF
+            echo "BR2_SYSTEM_BIN_SH_BASH=y" >> $CONF
             
             export BR2_JLEVEL=2
             ./build.sh milkv-duo-sd
