@@ -2,6 +2,16 @@ extern crate os_utils;
 extern crate sc;
 extern crate libc;
 
+use std::fs;
+
+fn set_panic_timeout(seconds: &str) {
+    if let Err(e) = fs::write("/proc/sys/kernel/panic", seconds) {
+        println!("Failed to set panic timeout! Error: {}", e)
+    } else {
+        println!("[ OK ] Set panic timout to {} seconds", seconds)
+    }
+}
+
 fn main() {
     // --- INITIALIZATION PHASE ---
     // We must mount these virtual filesystems first or nothing (like /dev/console or /proc) will work.
@@ -10,8 +20,7 @@ fn main() {
     os_utils::mount("sysfs\0", "/sys\0", "sysfs\0");
     
     os_utils::print("[ OK ] FILESYSTEMS MOUNTED\n");
-    os_utils::print("Welcome to Onish-OS\n");
-    os_utils::print("--VERSION 0.8 PRE-RELEASE--\n");
+    set_panic_timeout("10");
 
     // Find existing shell to avoid a unuseable distro.
     let mut shell_path = "/bin/sh";
@@ -70,6 +79,10 @@ fn main() {
                 // Wait specifically for our Bash PID. 
                 // This ignores orphans (like background tasks) so we don't reboot early.
                 libc::waitpid(pid as i32, &mut status, 0);
+
+                while libc::waitpid(-1, &mut status, libc::WNOHANG) > 0 {
+                    // Keep reaping until all zombies are dead.
+                }
             }
 
             // --- POWER MANAGEMENT ---
@@ -81,9 +94,11 @@ fn main() {
                 os_utils::shutdown();
             } else if choice == "reboot" {
                 os_utils::reboot();
-            } 
+            } else if choice == "goodbye" {
+                os_utils::suicide(93)
+            }
             // If they type 'shell' or anything else, the loop repeats and restarts Bash.
             os_utils::print("Restarting session...\n");
         }
     }
-} // Is my english good? 
+}
