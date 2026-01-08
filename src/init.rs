@@ -3,6 +3,7 @@ extern crate sc;
 extern crate libc;
 
 use std::fs;
+use std::path::Path;
 
 fn set_panic_timeout(seconds: &str) {
     if let Err(e) = fs::write("/proc/sys/kernel/panic", seconds) {
@@ -22,21 +23,19 @@ fn main() {
     os_utils::print("[ OK ] FILESYSTEMS MOUNTED\n");
     set_panic_timeout("10");
 
-    // Find existing shell to avoid a unuseable distro.
-    let mut shell_path = "/bin/sh";
-    let shells = ["/usr/bin/bash", "/bin/bash", "/bin/sh", "/usr/bin/sh"];
-    for path in shells {
-        if std::path::Path::new(path).exists() {
-            println!("DEBUG: Checking if {} exists", path);
-            shell_path = path;
-            break;
-        } else {
-            println!("DEBUG: {} 404 Not found", path)
-        }
-    }
+    let shell_file = fs::read_to_string("etc/shell.txt");
+    let configured_shell = match &shell_file {
+        Ok(s) => s.trim(),
+        Err(_) => "/bin/sh",
+    };
 
-    // Tell shell thats being used.
-    println!("DEBUG: Using shell {}", shell_path);
+    // Find existing shell to avoid a unuseable distro.
+    let shell_path = if Path::new(&configured_shell).exists() {
+        configured_shell
+    } else {
+        println!("[ ERROR ] Configured shell not found falling back to bin/sh");
+        "bin/sh"
+    };
 
     // We wrap the entire Shell + Power logic in a loop.
     // This prevents the "PID 1 Attempted to Kill" Kernel Panic.
