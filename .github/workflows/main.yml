@@ -1,4 +1,4 @@
-name: Build Onish-OS v0.7
+name: Build Onish-OS v0.8
 on: [push]
 
 jobs:
@@ -27,41 +27,70 @@ jobs:
           libtool wget curl git gcc libssl-dev bc squashfs-tools jq scons parallel tree \
           device-tree-compiler python3-pip python3-setuptools fakeroot genext2fs mtools \
           rsync dosfstools expect bison flex libncurses-dev u-boot-tools vim-common unzip \
-          gcc-riscv64-linux-gnu # THIS IS THE CRITICAL CROSS-LINKER
+          gcc-riscv64-linux-gnu 
 
           pip3 install jinja2 setuptools
 
       - name: Build Rust Init
         run: |
-          # 1. Add the RISC-V Musl target to Rust
+          # 1. Add the RISC-V Musl target
           rustup target add riscv64gc-unknown-linux-musl
           
-          # 2. Build with the correct Cross-Linker for RISC-V
-          # We force crt-static to ensure the Musl C library is bundled inside the binary
+          # 2. Build Init (Static linking for Musl)
           CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-linux-gnu-gcc \
           RUSTFLAGS="-C target-feature=+crt-static" \
           cargo build --release --target riscv64gc-unknown-linux-musl -p init
           
-          # 3. Create RootFS Overlay
-          mkdir -p overlay/sbin overlay/proc overlay/sys overlay/dev overlay/tmp
+          # 3. Create RootFS Overlay Structure
+          mkdir -p overlay/sbin overlay/bin overlay/etc overlay/proc overlay/sys overlay/dev overlay/tmp overlay/root
+          
+          # 4. Copy Init to the correct location
           cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
           chmod +x overlay/sbin/init
 
+          # 5. Create Symlinks for Bash (Critical for your Rust code!)
+          # We point /bin/bash to where Buildroot will install it
+          ln -sf /usr/bin/bash overlay/bin/bash
+          ln -sf /usr/bin/bash overlay/bin/sh
+
+      - name: Create System Profile (Network + Branding)
+        run: |
+          cat <<EOF > overlay/etc/profile
+          #!/bin/sh
+          export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+          export TERM=xterm
+          export HOME=/root
+          export PS1='\[\033[01;32m\]Onish-OS\[\033[00m\] \w \$ '
+
+          echo "------------------------------------------------"
+          echo "   WELCOME TO ONISH-OS v0.8 (Pre-release)       "
+          echo "   Building for Milk-V Duo | Running Bash       "
+          echo "------------------------------------------------"
+
+          # Network Fix: Linux inits drivers, we init the link
+          echo "[ OK ] Starting Network (eth0)..."
+          ip link set eth0 up
+          udhcpc -i eth0 & 
+          EOF
+          chmod +x overlay/etc/profile
+
       - name: Build Full OS
         run: |
-          # Create absolute path for artifacts
           OUTPUT_DIR="${{ github.workspace }}/out"
           mkdir -p "$OUTPUT_DIR"
 
           if [ "${{ matrix.target }}" == "qemu" ]; then
-            # --- PURE QEMU VIRT BUILD ---
+            # --- QEMU VIRT BUILD ---
             git clone https://github.com/buildroot/buildroot.git --depth=1 --branch=2024.02.x
             cd buildroot
             make qemu_riscv64_virt_defconfig
+            
+            # Inject Onish-OS Settings
             echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> .config
             echo 'BR2_TARGET_GENERIC_GETTY_PORT="ttyS0"' >> .config
-            # Ensure buildroot knows we are using a custom init
             echo 'BR2_INIT_NONE=y' >> .config 
+            echo 'BR2_PACKAGE_BASH=y' >> .config
+            
             make olddefconfig
             make -j$(nproc)
             cp output/images/Image "$OUTPUT_DIR/"
@@ -72,25 +101,24 @@ jobs:
             cd duo-buildroot-sdk
             git clone https://github.com/milkv-duo/host-tools.git --depth=1
             
-            # Map system dtc
             mkdir -p host-tools/gcc/riscv64-linux-musl-x86_64/bin
             sudo ln -sf /usr/bin/dtc host-tools/gcc/riscv64-linux-musl-x86_64/bin/dtc
 
             CONF="buildroot-2021.05/configs/milkv-duo_musl_riscv64_defconfig"
+            
+            # Inject Onish-OS Settings into Hardware Defconfig
             echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> $CONF
+            echo "BR2_PACKAGE_BASH=y" >> $CONF
             
             export BR2_JLEVEL=2
             ./build.sh milkv-duo-sd
             
-            # 1. Copy the .img file
             cp out/*.img "$OUTPUT_DIR/"
-            
-            # 2. Find and copy the vmlinux file
             find . -name "vmlinux" -type f -exec cp {} "$OUTPUT_DIR/" \;
           fi
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: onish-os-v7-${{ matrix.target }}
+          name: onish-os-v0.8-${{ matrix.target }}
           path: out/
