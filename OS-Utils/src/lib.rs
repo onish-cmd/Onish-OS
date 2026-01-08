@@ -1,5 +1,10 @@
 extern crate sc;
-use std::io::{self, Write};
+extern crate libc;
+
+use std::{fs::OpenOptions, io::{self, Write}};
+use std::os::unix::io::AsRawFd;
+
+use libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO, TIOCSCTTY, dup2, ioctl, setsid};
 
 pub fn input(prompt: &str) -> String {
     print!("{}", prompt);
@@ -50,10 +55,19 @@ pub fn wait4child() {
 
 pub fn attach_console() {
     unsafe {
-        let fd = sc::syscall4(56, -100isize as usize, "/dev/console\0".as_ptr() as usize, 2, 0);
-        sc::syscall3(24, fd, 0, 0);
-        sc::syscall3(24, fd, 1, 0);
-        sc::syscall3(24, fd, 2, 0);
+        setsid();
+        
+        let console = OpenOptions::new().read(true).write(true).open("/dev/console").expect("Failed to open console");
+
+        let fd = console.as_raw_fd();
+
+        if ioctl(fd, TIOCSCTTY, 1) > 0 {
+            
+        }
+
+        dup2(fd, STDIN_FILENO);
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
     }
 }
 

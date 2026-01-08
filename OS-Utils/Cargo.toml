@@ -7,3 +7,4 @@ path = "src/lib.rs"
 
 [dependencies]
 sc = "0.2"
+libc = "0.2"
