@@ -48,11 +48,6 @@ jobs:
           cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
           chmod +x overlay/sbin/init
 
-          # 5. Create Symlinks for Bash (Critical for your Rust code!)
-          # We point /bin/bash to where Buildroot will install it
-          ln -sf /usr/bin/bash overlay/bin/bash
-          ln -sf /usr/bin/bash overlay/bin/sh
-
       - name: Create System Profile (Network + Branding)
         run: |
           cat <<EOF > overlay/etc/profile
