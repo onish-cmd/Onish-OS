@@ -13,6 +13,19 @@ fn main() {
     os_utils::print("Welcome to Onish-OS\n");
     os_utils::print("--VERSION 0.8 PRE-RELEASE--\n");
 
+    // Find existing shell to avoid a unuseable distro.
+    let mut shell_path = "/bin/sh";
+    let shells = ["/usr/bin/bash", "/bin/bash", "/bin/sh", "/usr/bin/sh"];
+    for path in shells {
+        if std::path::Path::new(path).exists() {
+            shell_path = path;
+            break;
+        }
+    }
+
+    // Tell shell thats being used.
+    println!("DEBUG: Using shell {}", shell_path);
+
     // We wrap the entire Shell + Power logic in a loop.
     // This prevents the "PID 1 Attempted to Kill" Kernel Panic.
     loop {
@@ -30,7 +43,7 @@ fn main() {
 
             // Launching Bash as a 'Login Shell' (-l).
             // This triggers /etc/profile which we will use to fix the network.
-            let child = Command::new("/bin/sh")
+            let child = Command::new(shell_path)
                 .arg("-l")
                 .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
                 .env("TERM", "xterm")
