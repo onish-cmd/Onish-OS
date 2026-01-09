@@ -30,11 +30,11 @@ fn main() {
     };
 
     // Find existing shell to avoid a unuseable distro.
-    let shell_path = if Path::new(&configured_shell).exists() {
+    let shell_path = if Path::new(&configured_shell).is_file() {
         configured_shell
     } else {
-        println!("[ ERROR ] Configured shell not found falling back to bin/sh");
-        "bin/sh"
+        println!("[ ERROR ] Configured shell not found falling back to /bin/sh");
+        "/bin/sh"
     };
 
     // We wrap the entire Shell + Power logic in a loop.

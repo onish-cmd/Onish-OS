@@ -90,7 +90,7 @@ jobs:
           # Simple Network Auto-Start
           if ! ip addr show eth0 | grep -q "inet "; then
               ip link set eth0 up
-              udhcpc -i eth0 &
+              udhcpc -i eth0 > /dev/null
           fi
 
           echo "------------------------------------------------"
@@ -98,6 +98,13 @@ jobs:
           echo "   Core: Rust Init | Package Manager: APK       "
           echo "------------------------------------------------"
           EOF
+
+
+      - name: Manual APK Injection (Bulletproof)
+        run: |
+          # Download the official Alpine static apk binary for RISC-V
+          wget https://gitlab.alpinelinux.org/api/v4/projects/5/packages/generic/apk-tools/2.14.4-riscv64/apk.static -O overlay/sbin/apk
+          chmod +x overlay/sbin/apk
 
       - name: Build Full OS
         run: |
@@ -115,9 +122,6 @@ jobs:
               echo 'BR2_INIT_NONE=y'
               echo 'BR2_PACKAGE_BASH=y'
               echo 'BR2_PACKAGE_ZSH=y'
-              echo 'BR2_PACKAGE_APK_TOOLS=y'
-              echo 'BR2_PACKAGE_CA_CERTIFICATES=y'
-              echo 'BR2_PACKAGE_OPENSSL=y'
             } >> .config
             
             make olddefconfig
@@ -135,9 +139,6 @@ jobs:
             {
               echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\""
               echo "BR2_PACKAGE_BASH=y"
-              echo "BR2_PACKAGE_ZSH=y"
-              echo 'BR2_PACKAGE_APK_TOOLS=y'
-              echo 'BR2_PACKAGE_CA_CERTIFICATES=y'
             } >> $CONF
             
             ./build.sh milkv-duo-sd
