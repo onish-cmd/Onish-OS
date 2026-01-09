@@ -78,35 +78,6 @@ jobs:
           fi
           echo "SUCCESS: APK binary ready. Size: $(ls -lh overlay/sbin/apk | awk '{print $5}')"
 
-      - name: Configure Repos & Profiles
-        run: |
-          # Add Repos
-          cat <<EOF > overlay/etc/apk/repositories
-          https://dl-cdn.alpinelinux.org/alpine/v3.20/main
-          https://dl-cdn.alpinelinux.org/alpine/v3.20/community
-          EOF
-
-          # Get Security Keys
-          curl -L --insecure https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub \
-               -o overlay/etc/apk/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub
-
-          # Profile with 0.9 Banner
-          cat <<EOF > overlay/etc/profile
-          export PATH=/usr/bin:/bin:/usr/sbin:/sbin
-          export TERM=xterm
-          export HOME=/root
-
-          if ! ip addr show eth0 | grep -q "inet "; then
-              ip link set eth0 up
-              udhcpc -i eth0 > /dev/null 2>&1
-          fi
-
-          echo "------------------------------------------------"
-          echo "     WELCOME TO ONISH-OS v0.9 (GPL-3.0)         "
-          echo "   Core: Rust Init | Package Manager: APK       "
-          echo "------------------------------------------------"
-          EOF
-
       - name: Build Full OS
         run: |
           OUTPUT_DIR="${{ github.workspace }}/out"

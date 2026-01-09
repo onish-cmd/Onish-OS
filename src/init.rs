@@ -4,6 +4,7 @@ extern crate libc;
 
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 fn set_panic_timeout(seconds: &str) {
     if let Err(e) = fs::write("/proc/sys/kernel/panic", seconds) {
@@ -21,13 +22,52 @@ fn main() {
     os_utils::mount("sysfs\0", "/sys\0", "sysfs\0");
     
     os_utils::print("[ OK ] FILESYSTEMS MOUNTED\n");
+    println!("-------------------------------");
+    println!("         Onish-OS 1.0          ");
+    println!("-------------------------------");
     set_panic_timeout("10");
 
+    // Find user configured shell.
     let shell_file = fs::read_to_string("etc/shell.txt");
     let configured_shell = match &shell_file {
         Ok(s) => s.trim(),
         Err(_) => "/bin/sh",
     };
+
+
+    println!("[ INFO ] Bringing up network for self-healing...");
+    let _ = Command::new("ip").args(["link", "set", "eth0", "up"]).status();
+    let _ = Command::new("udhcpc").args(["-i", "eth0", "-q", "-n"]).status();
+
+    // Package manager repair.
+    if !Path::new("/lib/apk/db/installed").exists() {
+        println!("Repairing apk!");
+        fs::create_dir_all("/lib/apk/db").ok();
+        fs::File::create("/lib/apk/db/installed").ok();
+    }
+
+    if !Path::new("/etc/apk/world").exists() {
+        fs::File::create("/etc/apk/world").ok();
+    }
+
+    if !Path::new("/etc/ssl/certs/ca-certificates.crt").exists() {
+        println!("SSL missing installing now!");
+        
+        let status = Command::new("apk")
+        .args([
+            "add",
+            "ca-certificates",
+            "alpine-keys",
+            "repository", "http://dl-cdn.alpinelinux.org/alpine/v3.20/main",
+            "--allow-untrusted"
+        ])
+        .status();
+    
+    match status {
+        Ok(s) => if s.success() { println!("Sucessful SSL Certificates are installed.") }
+        Err(e) => println!("Failed to install SSL Error {}", e),
+    }
+    }
 
     // Find existing shell to avoid a unuseable distro.
     let shell_path = if Path::new(&configured_shell).is_file() {
@@ -57,6 +97,7 @@ fn main() {
             let child = Command::new(shell_path)
                 .arg("-l")
                 .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+                .env("HOME", "/root")
                 .env("TERM", "xterm")
                 .spawn();
 
