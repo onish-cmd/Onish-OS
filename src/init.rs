@@ -50,10 +50,20 @@ fn main() {
         fs::File::create("/etc/apk/world").ok();
     }
 
+    // Search for APK for self-repair
+    let apk_paths = ["/bin/apk", "/usr/bin/apk", "/sbin/apk"];
+    let mut apk_path = "/sbin/apk";
+    for path in apk_paths {
+        if Path::new(path).exists() {
+            apk_path = path;
+            println!("APK exists at {}", apk_path)
+        }
+    }
+
     if !Path::new("/etc/ssl/certs/ca-certificates.crt").exists() {
         println!("SSL missing installing now!");
         
-        let status = Command::new("apk")
+        let status = Command::new(apk_path)
         .args([
             "add",
             "ca-certificates",
