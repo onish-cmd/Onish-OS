@@ -1,4 +1,4 @@
-name: Build Onish-OS v0.8
+name: Build Onish-OS v0.9
 on: [push]
 
 jobs:
@@ -28,46 +28,76 @@ jobs:
           device-tree-compiler python3-pip python3-setuptools fakeroot genext2fs mtools \
           rsync dosfstools expect bison flex libncurses-dev u-boot-tools vim-common unzip \
           gcc-riscv64-linux-gnu 
-
           pip3 install jinja2 setuptools
 
-      - name: Build Rust Init
+      - name: Build Rust Init & Overlay Structure
         run: |
-          # 1. Add the RISC-V Musl target
+          # 1. Setup Rust for RISC-V Musl
           rustup target add riscv64gc-unknown-linux-musl
           
-          # 2. Build Init (Static linking for Musl)
+          # 2. Build Static Init
           CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-linux-gnu-gcc \
           RUSTFLAGS="-C target-feature=+crt-static" \
           cargo build --release --target riscv64gc-unknown-linux-musl -p init
           
-          # 3. Create RootFS Overlay Structure
-          mkdir -p overlay/sbin overlay/bin overlay/etc overlay/proc overlay/sys overlay/dev overlay/tmp overlay/root
+          # 3. Create RootFS Structure
+          mkdir -p overlay/sbin overlay/bin overlay/etc/apk/keys overlay/proc overlay/sys \
+                   overlay/dev overlay/tmp overlay/root overlay/etc/skel overlay/usr/bin
           
-          # 4. Copy Init to the correct location
+          # 4. Deploy Init
           cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
           chmod +x overlay/sbin/init
 
-      - name: Create System Profile (Network + Branding)
+      - name: Configure APK & Shells
+        run: |
+          # 1. Add Alpine Repos (v3.20 is current for RISC-V)
+          cat <<EOF > overlay/etc/apk/repositories
+          https://dl-cdn.alpinelinux.org/alpine/v3.20/main
+          https://dl-cdn.alpinelinux.org/alpine/v3.20/community
+          EOF
+
+          # 2. Get Alpine Security Keys (Crucial for APK to work)
+          curl -L https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub \
+               -o overlay/etc/apk/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub
+
+          # 3. Create .bashrc
+          cat <<EOF > overlay/root/.bashrc
+          alias ls='ls --color=auto'
+          alias ll='ls -alF'
+          PS1='\[\033[01;32m\]Onish-OS\[\033[00m\] \w \$ '
+          EOF
+
+          # 4. Create .zshrc (With Autocorrect!)
+          cat <<EOF > overlay/root/.zshrc
+          alias ls='ls --color=auto'
+          alias ll='ls -al'
+          PROMPT='%F{green}Onish-OS%f %~ %# '
+          setopt CORRECT
+          setopt AUTO_CD
+          EOF
+
+          # Copy to skeleton for future users
+          cp overlay/root/.bashrc overlay/etc/skel/
+          cp overlay/root/.zshrc overlay/etc/skel/
+
+      - name: Create System Profile
         run: |
           cat <<EOF > overlay/etc/profile
-          #!/bin/sh
           export PATH=/usr/bin:/bin:/usr/sbin:/sbin
           export TERM=xterm
           export HOME=/root
-          export PS1='\[\033[01;32m\]Onish-OS\[\033[00m\] \w \$ '
+
+          # Simple Network Auto-Start
+          if ! ip addr show eth0 | grep -q "inet "; then
+              ip link set eth0 up
+              udhcpc -i eth0 &
+          fi
 
           echo "------------------------------------------------"
-          echo "   WELCOME TO ONISH-OS v0.8 (Pre-release)       "
-          echo "   Building for Milk-V Duo | Running Bash       "
+          echo "     WELCOME TO ONISH-OS v0.9 (GPL-3.0)         "
+          echo "   Core: Rust Init | Package Manager: APK       "
           echo "------------------------------------------------"
-
-          # Network Fix: Linux inits drivers, we init the link
-          echo "[ OK ] Starting Network (eth0)..."
-          ip link set eth0 up
-          udhcpc -i eth0 & 
           EOF
-          chmod +x overlay/etc/profile
 
       - name: Build Full OS
         run: |
@@ -75,53 +105,47 @@ jobs:
           mkdir -p "$OUTPUT_DIR"
 
           if [ "${{ matrix.target }}" == "qemu" ]; then
-            # --- QEMU VIRT BUILD ---
             git clone https://github.com/buildroot/buildroot.git --depth=1 --branch=2024.02.x
             cd buildroot
             make qemu_riscv64_virt_defconfig
             
-            # Inject Onish-OS Settings
-            echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> .config
-            echo 'BR2_TARGET_GENERIC_GETTY_PORT="ttyS0"' >> .config
-            echo 'BR2_INIT_NONE=y' >> .config 
-            echo 'BR2_PACKAGE_BASH=y' >> .config
-            echo 'BR2_SYSTEM_BIN_SH_BASH=y' >> .config
-            echo 'BR2_PACKAGE_ZSH=y' >> .config
-            echo 'BR2_PACKAGE_NCURSES=y' >> .config
-            echo 'BR2_PACKAGE_NCURSES_TARGET_PROGS=y' >> .config
+            # Inject Settings
+            {
+              echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\""
+              echo 'BR2_INIT_NONE=y'
+              echo 'BR2_PACKAGE_BASH=y'
+              echo 'BR2_PACKAGE_ZSH=y'
+              echo 'BR2_PACKAGE_APK_TOOLS=y'
+              echo 'BR2_PACKAGE_CA_CERTIFICATES=y'
+              echo 'BR2_PACKAGE_OPENSSL=y'
+            } >> .config
             
             make olddefconfig
             make -j$(nproc)
             cp output/images/Image "$OUTPUT_DIR/"
             cp output/images/rootfs.ext2 "$OUTPUT_DIR/"
           else
-            # --- MILK-V HARDWARE BUILD ---
             git clone https://github.com/milkv-duo/duo-buildroot-sdk.git --depth=1
             cd duo-buildroot-sdk
             git clone https://github.com/milkv-duo/host-tools.git --depth=1
-            
             mkdir -p host-tools/gcc/riscv64-linux-musl-x86_64/bin
             sudo ln -sf /usr/bin/dtc host-tools/gcc/riscv64-linux-musl-x86_64/bin/dtc
 
             CONF="buildroot-2021.05/configs/milkv-duo_musl_riscv64_defconfig"
+            {
+              echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\""
+              echo "BR2_PACKAGE_BASH=y"
+              echo "BR2_PACKAGE_ZSH=y"
+              echo 'BR2_PACKAGE_APK_TOOLS=y'
+              echo 'BR2_PACKAGE_CA_CERTIFICATES=y'
+            } >> $CONF
             
-            # Inject Onish-OS Settings into Hardware Defconfig
-            echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> $CONF
-            echo "BR2_PACKAGE_BASH=y" >> $CONF
-            echo "BR2_SYSTEM_BIN_SH_BASH=y" >> $CONF
-            echo "BR2_PACKAGE_ZSH=y" >> $CONF
-            echo "BR2_PACKAGE_NCURSES=y" >> $CONF
-            echo "BR2_PACKAGE_NCURSES_TARGET_PROGS=y" >> $CONF
-            
-            export BR2_JLEVEL=2
             ./build.sh milkv-duo-sd
-            
             cp out/*.img "$OUTPUT_DIR/"
-            find . -name "vmlinux" -type f -exec cp {} "$OUTPUT_DIR/" \;
           fi
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: onish-os-v0.8-${{ matrix.target }}
+          name: onish-os-v0.8.1-${{ matrix.target }}
           path: out/
