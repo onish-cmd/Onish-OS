@@ -51,7 +51,7 @@ jobs:
           sudo apt-get install -y pkg-config build-essential ninja-build automake autoconf \
           libtool wget curl git gcc libssl-dev bc squashfs-tools jq scons parallel tree \
           device-tree-compiler python3-pip python3-setuptools fakeroot rsync dosfstools \
-          bison flex libncurses-dev u-boot-tools file
+          bison flex libncurses-dev u-boot-tools file expect
 
       # ... [Your Rust Init & APK Injection steps stay exactly the same here] ...
 
