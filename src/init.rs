@@ -6,6 +6,11 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+const GREEN: &str = "\x1b[32m";
+const RED: &str = "\x1b[31m";
+const BOLD: &str = "\x1b[1m";
+const RESET: &str = "\x1b[0m";
+
 fn set_panic_timeout(seconds: &str) {
     if let Err(e) = fs::write("/proc/sys/kernel/panic", seconds) {
         println!("Failed to set panic timeout! Error: {}", e)
@@ -21,7 +26,7 @@ fn main() {
     os_utils::mount("devtmpfs\0", "/dev\0", "devtmpfs\0");
     os_utils::mount("sysfs\0", "/sys\0", "sysfs\0");
     
-    os_utils::print("[ OK ] FILESYSTEMS MOUNTED\n");
+    println!("[{}{} OK {}] FILESYSTEMS MOUNTED", BOLD, GREEN, RESET);
     println!("-------------------------------");
     println!("         Onish-OS 1.0          ");
     println!("-------------------------------");
@@ -68,7 +73,7 @@ fn main() {
             "add",
             "ca-certificates",
             "alpine-keys",
-            "repository", "http://dl-cdn.alpinelinux.org/alpine/v3.20/main",
+            "--repository", "http://dl-cdn.alpinelinux.org/alpine/v3.20/main",
             "--allow-untrusted"
         ])
         .status();
@@ -83,7 +88,7 @@ fn main() {
     let shell_path = if Path::new(&configured_shell).is_file() {
         configured_shell
     } else {
-        println!("[ ERROR ] Configured shell not found falling back to /bin/sh");
+        println!("[{}{} ERROR {}] Configured shell not found falling back to /bin/sh", BOLD, RED, RESET);
         "/bin/sh"
     };
 
@@ -117,7 +122,7 @@ fn main() {
                     proc.wait().expect("Bash crashed");
                 }
                 Err(e) => {
-                    println!("FATAL: {} failed to run Error: {} \n", shell_path, e);
+                    println!("{}FATAL: {} {} failed to run Error: {} \n", RED, RESET, shell_path, e);
                 }
             }
             // If Bash ends, this child process MUST die or it will try to act like PID 1.
