@@ -102,8 +102,14 @@ jobs:
 
       - name: Manual APK Injection (Bulletproof)
         run: |
-          # Download the official Alpine static apk binary for RISC-V
-          wget https://gitlab.alpinelinux.org/api/v4/projects/5/packages/generic/apk-tools/2.14.4-riscv64/apk.static -O overlay/sbin/apk
+          # Use the stable v3.20 repository path for the static binary
+          wget https://dl-cdn.alpinelinux.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r0.apk
+          
+          # Since it's an .apk file (which is just a tar.gz), we extract the binary
+          tar -xzf apk-tools-static-2.14.4-r0.apk sbin/apk.static
+          
+          # Move it to your overlay and rename it to just 'apk'
+          mv sbin/apk.static overlay/sbin/apk
           chmod +x overlay/sbin/apk
 
       - name: Build Full OS
