@@ -46,7 +46,7 @@ fn main() {
     .stderr(Stdio::inherit())
     .status();
 
-    let _ = Command::new("udhcpc").args(["-i", "eth0", "-q", "-n"])
+    let _ = Command::new("udhcpc").args(["-i", "eth0", "-t", "5", "-T", "4", "-q",])
     
     .stdout(Stdio::inherit()) // <--- Send logs to terminal
     .stderr(Stdio::inherit())
