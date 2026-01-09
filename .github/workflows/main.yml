@@ -32,42 +32,34 @@ jobs:
 
       - name: Build Rust Init & Overlay Structure
         run: |
-          # 1. Setup Rust for RISC-V Musl
           rustup target add riscv64gc-unknown-linux-musl
           
-          # 2. Build Static Init
           CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-linux-gnu-gcc \
           RUSTFLAGS="-C target-feature=+crt-static" \
           cargo build --release --target riscv64gc-unknown-linux-musl -p init
           
-          # 3. Create RootFS Structure
           mkdir -p overlay/sbin overlay/bin overlay/etc/apk/keys overlay/proc overlay/sys \
                    overlay/dev overlay/tmp overlay/root overlay/etc/skel overlay/usr/bin
           
-          # 4. Deploy Init
           cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
           chmod +x overlay/sbin/init
 
       - name: Configure APK & Shells
         run: |
-          # 1. Add Alpine Repos (v3.20 is current for RISC-V)
           cat <<EOF > overlay/etc/apk/repositories
           https://dl-cdn.alpinelinux.org/alpine/v3.20/main
           https://dl-cdn.alpinelinux.org/alpine/v3.20/community
           EOF
 
-          # 2. Get Alpine Security Keys (Crucial for APK to work)
           curl -L https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub \
                -o overlay/etc/apk/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub
 
-          # 3. Create .bashrc
           cat <<EOF > overlay/root/.bashrc
           alias ls='ls --color=auto'
           alias ll='ls -alF'
           PS1='\[\033[01;32m\]Onish-OS\[\033[00m\] \w \$ '
           EOF
 
-          # 4. Create .zshrc (With Autocorrect!)
           cat <<EOF > overlay/root/.zshrc
           alias ls='ls --color=auto'
           alias ll='ls -al'
@@ -76,7 +68,6 @@ jobs:
           setopt AUTO_CD
           EOF
 
-          # Copy to skeleton for future users
           cp overlay/root/.bashrc overlay/etc/skel/
           cp overlay/root/.zshrc overlay/etc/skel/
 
@@ -87,7 +78,6 @@ jobs:
           export TERM=xterm
           export HOME=/root
 
-          # Simple Network Auto-Start
           if ! ip addr show eth0 | grep -q "inet "; then
               ip link set eth0 up
               udhcpc -i eth0 > /dev/null
@@ -99,21 +89,13 @@ jobs:
           echo "------------------------------------------------"
           EOF
 
-          - name: Manual APK Injection (Force Download)
+      - name: Manual APK Injection (Force Download)
         run: |
-          # 1. Use --no-check-certificate to bypass the 443 handshake error
-          # 2. Use -L with curl as an alternative to wget (it handles redirects better)
           curl -L --insecure https://dl-cdn.alpinelinux.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r0.apk -o apk-static.apk
-          
-          # 3. Extract the binary
           tar -xzf apk-static.apk sbin/apk.static
-          
-          # 4. Move to overlay
           mkdir -p overlay/sbin
           mv sbin/apk.static overlay/sbin/apk
           chmod +x overlay/sbin/apk
-          
-          # 5. VERIFY: This will fail the build immediately if the file is missing
           ls -lh overlay/sbin/apk
 
       - name: Build Full OS
@@ -125,15 +107,12 @@ jobs:
             git clone https://github.com/buildroot/buildroot.git --depth=1 --branch=2024.02.x
             cd buildroot
             make qemu_riscv64_virt_defconfig
-            
-            # Inject Settings
             {
               echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\""
               echo 'BR2_INIT_NONE=y'
               echo 'BR2_PACKAGE_BASH=y'
               echo 'BR2_PACKAGE_ZSH=y'
             } >> .config
-            
             make olddefconfig
             make -j$(nproc)
             cp output/images/Image "$OUTPUT_DIR/"
@@ -144,13 +123,11 @@ jobs:
             git clone https://github.com/milkv-duo/host-tools.git --depth=1
             mkdir -p host-tools/gcc/riscv64-linux-musl-x86_64/bin
             sudo ln -sf /usr/bin/dtc host-tools/gcc/riscv64-linux-musl-x86_64/bin/dtc
-
             CONF="buildroot-2021.05/configs/milkv-duo_musl_riscv64_defconfig"
             {
               echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\""
               echo "BR2_PACKAGE_BASH=y"
             } >> $CONF
-            
             ./build.sh milkv-duo-sd
             cp out/*.img "$OUTPUT_DIR/"
           fi
@@ -158,5 +135,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: onish-os-v0.8.1-${{ matrix.target }}
+          name: onish-os-v0.9-${{ matrix.target }}
           path: out/
