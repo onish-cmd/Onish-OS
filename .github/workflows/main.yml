@@ -27,13 +27,12 @@ jobs:
           libtool wget curl git gcc libssl-dev bc squashfs-tools jq scons parallel tree \
           device-tree-compiler python3-pip python3-setuptools fakeroot genext2fs mtools \
           rsync dosfstools expect bison flex libncurses-dev u-boot-tools vim-common unzip \
-          gcc-riscv64-linux-gnu 
+          gcc-riscv64-linux-gnu file
           pip3 install jinja2 setuptools
 
       - name: Build Rust Init & Overlay Structure
         run: |
           rustup target add riscv64gc-unknown-linux-musl
-          
           CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-linux-gnu-gcc \
           RUSTFLAGS="-C target-feature=+crt-static" \
           cargo build --release --target riscv64gc-unknown-linux-musl -p init
@@ -44,35 +43,54 @@ jobs:
           cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
           chmod +x overlay/sbin/init
 
-      - name: Configure APK & Shells
+      - name: Manual APK Injection (Multi-Source Failover)
         run: |
+          mkdir -p overlay/sbin
+          
+          # Try Source A (Fastly CDN)
+          echo "Trying Source A..."
+          curl -L --insecure --user-agent "Mozilla/5.0" \
+            https://dl-cdn.alpinelinux.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r1.apk -o apk.apk || true
+
+          # Try Source B (Kernel.org) if A was fake/small
+          if [ ! -f apk.apk ] || [ $(stat -c%s apk.apk) -lt 10000 ]; then
+            echo "Source A failed, trying Source B (Kernel.org)..."
+            curl -L --insecure https://mirrors.edge.kernel.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r1.apk -o apk.apk || true
+          fi
+
+          # Try Source C (GitLab Direct) if B failed
+          if [ ! -f apk.apk ] || [ $(stat -c%s apk.apk) -lt 10000 ]; then
+            echo "Source B failed, trying Source C (GitLab)..."
+            curl -L --insecure https://gitlab.alpinelinux.org/alpine/apk-tools/-/releases/v2.14.4/downloads/apk.static.riscv64 -o overlay/sbin/apk
+            chmod +x overlay/sbin/apk
+          else
+            # If we got a real .apk file from A or B, extract the binary
+            echo "Extracting binary from .apk package..."
+            tar -xzf apk.apk sbin/apk.static
+            mv sbin/apk.static overlay/sbin/apk
+            chmod +x overlay/sbin/apk
+          fi
+
+          # FINAL VERIFICATION: Fail the build if APK is still missing or empty
+          if [ ! -s overlay/sbin/apk ]; then
+            echo "CRITICAL ERROR: APK binary could not be downloaded from any source!"
+            exit 1
+          fi
+          echo "SUCCESS: APK binary ready. Size: $(ls -lh overlay/sbin/apk | awk '{print $5}')"
+
+      - name: Configure Repos & Profiles
+        run: |
+          # Add Repos
           cat <<EOF > overlay/etc/apk/repositories
           https://dl-cdn.alpinelinux.org/alpine/v3.20/main
           https://dl-cdn.alpinelinux.org/alpine/v3.20/community
           EOF
 
-          curl -L https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub \
+          # Get Security Keys
+          curl -L --insecure https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub \
                -o overlay/etc/apk/keys/alpine-devel@lists.alpinelinux.org-616ae3bc.rsa.pub
 
-          cat <<EOF > overlay/root/.bashrc
-          alias ls='ls --color=auto'
-          alias ll='ls -alF'
-          PS1='\[\033[01;32m\]Onish-OS\[\033[00m\] \w \$ '
-          EOF
-
-          cat <<EOF > overlay/root/.zshrc
-          alias ls='ls --color=auto'
-          alias ll='ls -al'
-          PROMPT='%F{green}Onish-OS%f %~ %# '
-          setopt CORRECT
-          setopt AUTO_CD
-          EOF
-
-          cp overlay/root/.bashrc overlay/etc/skel/
-          cp overlay/root/.zshrc overlay/etc/skel/
-
-      - name: Create System Profile
-        run: |
+          # Profile with 0.9 Banner
           cat <<EOF > overlay/etc/profile
           export PATH=/usr/bin:/bin:/usr/sbin:/sbin
           export TERM=xterm
@@ -80,7 +98,7 @@ jobs:
 
           if ! ip addr show eth0 | grep -q "inet "; then
               ip link set eth0 up
-              udhcpc -i eth0 > /dev/null
+              udhcpc -i eth0 > /dev/null 2>&1
           fi
 
           echo "------------------------------------------------"
@@ -88,15 +106,6 @@ jobs:
           echo "   Core: Rust Init | Package Manager: APK       "
           echo "------------------------------------------------"
           EOF
-
-      - name: Manual APK Injection (Force Download)
-        run: |
-          curl -L --insecure https://dl-cdn.alpinelinux.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r0.apk -o apk-static.apk
-          tar -xzf apk-static.apk sbin/apk.static
-          mkdir -p overlay/sbin
-          mv sbin/apk.static overlay/sbin/apk
-          chmod +x overlay/sbin/apk
-          ls -lh overlay/sbin/apk
 
       - name: Build Full OS
         run: |
