@@ -4,7 +4,7 @@ extern crate libc;
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 const GREEN: &str = "\x1b[32m";
 const RED: &str = "\x1b[31m";
@@ -41,8 +41,16 @@ fn main() {
 
 
     println!("[ INFO ] Bringing up network for self-healing...");
-    let _ = Command::new("ip").args(["link", "set", "eth0", "up"]).status();
-    let _ = Command::new("udhcpc").args(["-i", "eth0", "-q", "-n"]).status();
+    let _ = Command::new("ip").args(["link", "set", "eth0", "up"])
+    .stdout(Stdio::inherit()) // <--- Send logs to terminal
+    .stderr(Stdio::inherit())
+    .status();
+
+    let _ = Command::new("udhcpc").args(["-i", "eth0", "-q", "-n"])
+    
+    .stdout(Stdio::inherit()) // <--- Send logs to terminal
+    .stderr(Stdio::inherit())
+    .status();
 
     // Package manager repair.
     if !Path::new("/lib/apk/db/installed").exists() {
