@@ -99,18 +99,22 @@ jobs:
           echo "------------------------------------------------"
           EOF
 
-
-      - name: Manual APK Injection (Bulletproof)
+          - name: Manual APK Injection (Force Download)
         run: |
-          # Use the stable v3.20 repository path for the static binary
-          wget https://dl-cdn.alpinelinux.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r0.apk
+          # 1. Use --no-check-certificate to bypass the 443 handshake error
+          # 2. Use -L with curl as an alternative to wget (it handles redirects better)
+          curl -L --insecure https://dl-cdn.alpinelinux.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r0.apk -o apk-static.apk
           
-          # Since it's an .apk file (which is just a tar.gz), we extract the binary
-          tar -xzf apk-tools-static-2.14.4-r0.apk sbin/apk.static
+          # 3. Extract the binary
+          tar -xzf apk-static.apk sbin/apk.static
           
-          # Move it to your overlay and rename it to just 'apk'
+          # 4. Move to overlay
+          mkdir -p overlay/sbin
           mv sbin/apk.static overlay/sbin/apk
           chmod +x overlay/sbin/apk
+          
+          # 5. VERIFY: This will fail the build immediately if the file is missing
+          ls -lh overlay/sbin/apk
 
       - name: Build Full OS
         run: |
