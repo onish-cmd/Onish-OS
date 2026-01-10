@@ -112,7 +112,7 @@ jobs:
               echo 'BR2_PACKAGE_ZSH=y'
             } >> .config
             make olddefconfig
-            make -j$(nproc)
+            unbuffer make -j$(nproc)
             cp output/images/Image "$OUTPUT_DIR/"
             cp output/images/rootfs.ext2 "$OUTPUT_DIR/"
           else
