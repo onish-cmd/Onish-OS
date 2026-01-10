@@ -86,7 +86,7 @@ jobs:
             # 2. Merge your specific OS config
             ./support/kconfig/merge_config.sh -m .config ../onish_os.config
             make olddefconfig
-            make -j$(nproc)
+            unbuffer make -j$(nproc)
             
             cp output/images/Image "$OUTPUT_DIR/"
             cp output/images/rootfs.ext2 "$OUTPUT_DIR/"
