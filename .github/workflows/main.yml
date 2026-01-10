@@ -1,20 +1,9 @@
-name: Build Onish-OS v1.0
-
-on:
-  workflow_dispatch:
-    inputs:
-      use_incremental:
-        description: 'Use incremental build?'
-        required: true
-        default: 'yes'
-        type: choice
-        options: [ 'yes', 'no' ]
+name: Build Onish-OS v0.9
+on: workflow_dispatch
 
 jobs:
   build_os:
     runs-on: ubuntu-24.04
-    permissions:
-      actions: write
     strategy:
       matrix:
         target: [hardware, qemu]
@@ -29,7 +18,22 @@ jobs:
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
-          remove-docker-images: 'true'
+
+      - name: Manual Deep Clean (More Space!)
+        run: |
+          # The -rf flag makes rm stay quiet if the folder is missing
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf "/usr/local/share/boost" || true
+          sudo rm -rf /usr/lib/jvm || true
+          
+          # Clean up any lingering package data
+          sudo apt-get autoremove -y > /dev/null
+          sudo apt-get clean > /dev/null
+          
+          echo "Disk space after deep clean:"
+          df -h
 
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -39,35 +43,58 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config build-essential ninja-build automake autoconf \
           libtool wget curl git gcc libssl-dev bc squashfs-tools jq scons parallel tree \
-          device-tree-compiler python3-pip python3-setuptools fakeroot rsync dosfstools \
-          bison flex libncurses-dev u-boot-tools file expect mtools genext2fs lld
+          device-tree-compiler python3-pip python3-setuptools fakeroot genext2fs mtools \
+          rsync dosfstools expect bison flex libncurses-dev u-boot-tools vim-common unzip \
+          gcc-riscv64-linux-gnu file
+          pip3 install jinja2 setuptools
 
-      - name: Build Your Rust Init
+      - name: Build Rust Init & Overlay Structure
         run: |
           rustup target add riscv64gc-unknown-linux-musl
-          export RUSTFLAGS="-C linker=rust-lld -C target-feature=+crt-static -C link-arg=-static"
-          cargo build --release --target riscv64gc-unknown-linux-musl
+          CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-linux-gnu-gcc \
+          RUSTFLAGS="-C target-feature=+crt-static" \
+          cargo build --release --target riscv64gc-unknown-linux-musl -p init
           
-          # Create universal overlay
-          mkdir -p ${{ github.workspace }}/overlay/sbin
-          cp target/riscv64gc-unknown-linux-musl/release/init ${{ github.workspace }}/overlay/sbin/init
-          cp target/riscv64gc-unknown-linux-musl/release/init ${{ github.workspace }}/overlay/init
-          chmod +x ${{ github.workspace }}/overlay/init
-          chmod +x ${{ github.workspace }}/overlay/sbin/init
+          mkdir -p overlay/sbin overlay/bin overlay/etc/apk/keys overlay/proc overlay/sys \
+                   overlay/dev overlay/tmp overlay/root overlay/etc/skel overlay/usr/bin
+          
+          cp target/riscv64gc-unknown-linux-musl/release/init overlay/sbin/init
+          chmod +x overlay/sbin/init
 
-      - name: Inject APK Package Manager
+      - name: Manual APK Injection (Multi-Source Failover)
         run: |
-          mkdir -p ${{ github.workspace }}/overlay/usr/bin
-          curl -L https://gitlab.alpinelinux.org/api/v4/projects/5/packages/generic/v2.14.0/riscv64/apk.static -o ${{ github.workspace }}/overlay/usr/bin/apk
-          chmod +x ${{ github.workspace }}/overlay/usr/bin/apk
+          mkdir -p overlay/sbin
+          
+          # Try Source A (Fastly CDN)
+          echo "Trying Source A..."
+          curl -L --insecure --user-agent "Mozilla/5.0" \
+            https://dl-cdn.alpinelinux.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r1.apk -o apk.apk || true
 
-      - name: Create Global Device Table
-        run: |
-          # This forces permissions regardless of the build target
-          cat <<EOF > ${{ github.workspace }}/onish_device_table.txt
-          /init f 755 0 0 - - - - -
-          /sbin/init f 755 0 0 - - - - -
-          EOF
+          # Try Source B (Kernel.org) if A was fake/small
+          if [ ! -f apk.apk ] || [ $(stat -c%s apk.apk) -lt 10000 ]; then
+            echo "Source A failed, trying Source B (Kernel.org)..."
+            curl -L --insecure https://mirrors.edge.kernel.org/alpine/v3.20/main/riscv64/apk-tools-static-2.14.4-r1.apk -o apk.apk || true
+          fi
+
+          # Try Source C (GitLab Direct) if B failed
+          if [ ! -f apk.apk ] || [ $(stat -c%s apk.apk) -lt 10000 ]; then
+            echo "Source B failed, trying Source C (GitLab)..."
+            curl -L --insecure https://gitlab.alpinelinux.org/alpine/apk-tools/-/releases/v2.14.4/downloads/apk.static.riscv64 -o overlay/sbin/apk
+            chmod +x overlay/sbin/apk
+          else
+            # If we got a real .apk file from A or B, extract the binary
+            echo "Extracting binary from .apk package..."
+            tar -xzf apk.apk sbin/apk.static
+            mv sbin/apk.static overlay/sbin/apk
+            chmod +x overlay/sbin/apk
+          fi
+
+          # FINAL VERIFICATION: Fail the build if APK is still missing or empty
+          if [ ! -s overlay/sbin/apk ]; then
+            echo "CRITICAL ERROR: APK binary could not be downloaded from any source!"
+            exit 1
+          fi
+          echo "SUCCESS: APK binary ready. Size: $(ls -lh overlay/sbin/apk | awk '{print $5}')"
 
       - name: Build Full OS
         run: |
@@ -75,48 +102,35 @@ jobs:
           mkdir -p "$OUTPUT_DIR"
 
           if [ "${{ matrix.target }}" == "qemu" ]; then
-            [ ! -d buildroot ] && git clone https://github.com/buildroot/buildroot.git --depth=1 --branch=2024.02.x
+            git clone https://github.com/buildroot/buildroot.git --depth=1 --branch=2024.02.x
             cd buildroot
             make qemu_riscv64_virt_defconfig
-            
-            # 1. Force the Overlay and Device Table paths
-            echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> .config
-            echo "BR2_ROOTFS_DEVICE_TABLE=\"${{ github.workspace }}/onish_device_table.txt\"" >> .config
-            
-            # 2. Merge your specific OS config
-            ./support/kconfig/merge_config.sh -m .config ../onish_os.config
+            {
+              echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\""
+              echo 'BR2_INIT_NONE=y'
+              echo 'BR2_PACKAGE_BASH=y'
+              echo 'BR2_PACKAGE_ZSH=y'
+            } >> .config
             make olddefconfig
-            unbuffer make -j$(nproc)
-            
+            make -j$(nproc)
             cp output/images/Image "$OUTPUT_DIR/"
             cp output/images/rootfs.ext2 "$OUTPUT_DIR/"
           else
-            [ ! -d duo-buildroot-sdk ] && git clone https://github.com/milkv-duo/duo-buildroot-sdk.git --depth=1
+            git clone https://github.com/milkv-duo/duo-buildroot-sdk.git --depth=1
             cd duo-buildroot-sdk
-            
-            # 1. Find the SDK's internal Buildroot directory
-            SDK_BR_DIR="buildroot-2021.05"
-            SDK_CONF="buildroot-2021.05/configs/milkv-duo_musl_riscv64_defconfig"
-            
-            # 2. Inject Overlay & Device Table into the SDK's hardware config
-            echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> $SDK_CONF
-            echo "BR2_ROOTFS_DEVICE_TABLE=\"${{ github.workspace }}/onish_device_table.txt\"" >> $SDK_CONF
-            
-            # 3. Merge Onish-OS specific tweaks
-            cat ../onish_os.config >> $SDK_CONF
-            
-            # 4. Run the Milk-V custom build script
+            git clone https://github.com/milkv-duo/host-tools.git --depth=1
+            mkdir -p host-tools/gcc/riscv64-linux-musl-x86_64/bin
+            sudo ln -sf /usr/bin/dtc host-tools/gcc/riscv64-linux-musl-x86_64/bin/dtc
+            CONF="buildroot-2021.05/configs/milkv-duo_musl_riscv64_defconfig"
+            {
+              echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\""
+              echo "BR2_PACKAGE_BASH=y"
+              echo "BR2_INIT_NONE=y"
+              echo "BR2_PACKAGE_BASH=y"
+              echo "BR2_PACKAGE_ZSH=y"
+            } >> $CONF
             ./build.sh milkv-duo-sd
             cp out/*.img "$OUTPUT_DIR/"
-          fi
-
-      - name: Final Integrity Check
-        run: |
-          echo "Listing the root of the generated OS structure..."
-          if [ "${{ matrix.target }}" == "qemu" ]; then
-            ls -l buildroot/output/target/init
-          else
-            ls -l duo-buildroot-sdk/buildroot-2021.05/output/target/init
           fi
 
       - name: Upload Artifacts
