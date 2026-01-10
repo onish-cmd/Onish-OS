@@ -41,24 +41,46 @@ fn main() {
 
 
     println!("[ INFO ] Bringing up network for self-healing...");
-    let status = Command::new("ip").args(["link", "set", "eth0", "up"])
+    let ip_paths = ["/sbin/ip", "/usr/sbin/ip", "/bin/ip", "/usr/bin/ip"];
+    let mut ip_path = "/sbin/ip";
+    for path in ip_paths {
+        if Path::new(path).exists() {
+            println!("Found IP at {}", path);
+            ip_path = path;
+            break;
+        }
+    }
+    Command::new(ip_path).args(["link", "set", "eth0", "up"])
+    .stdout(Stdio::inherit()) // <--- Send logs to terminal
+    .stderr(Stdio::inherit())
+    .status()
+    .expect("Failed IP");
+
+    let udhcpc_paths = ["/sbin/udhcpc", "/usr/sbin/udhcpc", "/bin/udhcpc"];
+    let mut udhcpc = "/sbin/udhcpc";
+    for path in udhcpc_paths {
+        if Path::new(path).exists() {
+            udhcpc = path;
+            println!("Found udhcpc at {}", udhcpc);
+        }
+    }
+    let status = Command::new(udhcpc).args(["-i", "eth0", "-t", "5", "-T", "4", "-s" , "/usr/share/udhcpc/default.script", "-q"])
     .stdout(Stdio::inherit()) // <--- Send logs to terminal
     .stderr(Stdio::inherit())
     .status();
 
-    match status {
-    Ok(s) if s.success() => println!("[{}{} OK {}] DHCP Lease obtained!", BOLD, GREEN, RESET),
-    _ => println!("[{}{} ERR {}] IP Failed - check if script exists", BOLD, RED, RESET),
-}
 
-    let status = Command::new("udhcpc").args(["-i", "eth0", "-t", "5", "-T", "4", "-s" , "/usr/share/udhcpc/default.script", "-q"])
-    .stdout(Stdio::inherit()) // <--- Send logs to terminal
-    .stderr(Stdio::inherit())
-    .status();
-
+    let mut repair = false;
+    println!("Set repair to {}", repair);
     match status {
-    Ok(s) if s.success() => println!("[{}{} OK {}] DHCP Lease obtained!", BOLD, GREEN, RESET),
-    _ => println!("[{}{} ERR {}] DHCP Failed - check if script exists", BOLD, RED, RESET),
+    Ok(s) if s.success() => {
+        println!("[{}{} OK {}] DHCP Lease obtained!", BOLD, GREEN, RESET);
+        repair = true;
+    },
+    _ => {
+        println!("[{}{} ERR {}] DHCP Failed - check if script exists", BOLD, RED, RESET);
+        repair = false;
+    },
 }
 
     // Package manager repair.
@@ -72,13 +94,15 @@ fn main() {
         fs::File::create("/etc/apk/world").ok();
     }
 
-    // Search for APK for self-repair
+    if repair == true {
+            // Search for APK for self-repair
     let apk_paths = ["/bin/apk", "/usr/bin/apk", "/sbin/apk"];
     let mut apk_path = "/sbin/apk";
     for path in apk_paths {
         if Path::new(path).exists() {
             apk_path = path;
-            println!("APK exists at {}", apk_path)
+            println!("APK exists at {}", apk_path);
+            break;
         }
     }
 
@@ -98,6 +122,7 @@ fn main() {
     match status {
         Ok(s) => if s.success() { println!("Sucessful SSL Certificates are installed.") }
         Err(e) => println!("Failed to install SSL Error {}", e),
+    }
     }
     }
 
