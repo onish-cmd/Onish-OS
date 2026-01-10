@@ -15,7 +15,7 @@ fn set_panic_timeout(seconds: &str) {
     if let Err(e) = fs::write("/proc/sys/kernel/panic", seconds) {
         println!("Failed to set panic timeout! Error: {}", e)
     } else {
-        println!("[ OK ] Set panic timout to {} seconds", seconds)
+        println!("[{}{} OK {}] Set panic timout to {} seconds", GREEN, BOLD, RESET, seconds)
     }
 }
 
@@ -41,16 +41,25 @@ fn main() {
 
 
     println!("[ INFO ] Bringing up network for self-healing...");
-    let _ = Command::new("ip").args(["link", "set", "eth0", "up"])
+    let status = Command::new("ip").args(["link", "set", "eth0", "up"])
     .stdout(Stdio::inherit()) // <--- Send logs to terminal
     .stderr(Stdio::inherit())
     .status();
 
-    let _ = Command::new("udhcpc").args(["-i", "eth0", "-t", "5", "-T", "4", "-q",])
-    
+    match status {
+    Ok(s) if s.success() => println!("[{}{} OK {}] DHCP Lease obtained!", BOLD, GREEN, RESET),
+    _ => println!("[{}{} ERR {}] IP Failed - check if script exists", BOLD, RED, RESET),
+}
+
+    let status = Command::new("udhcpc").args(["-i", "eth0", "-t", "5", "-T", "4", "-s" , "/usr/share/udhcpc/default.script", "-q"])
     .stdout(Stdio::inherit()) // <--- Send logs to terminal
     .stderr(Stdio::inherit())
     .status();
+
+    match status {
+    Ok(s) if s.success() => println!("[{}{} OK {}] DHCP Lease obtained!", BOLD, GREEN, RESET),
+    _ => println!("[{}{} ERR {}] DHCP Failed - check if script exists", BOLD, RED, RESET),
+}
 
     // Package manager repair.
     if !Path::new("/lib/apk/db/installed").exists() {
