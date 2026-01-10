@@ -49,7 +49,7 @@ jobs:
           
           # Create the overlay and move your init to the top level
           mkdir -p ${{ github.workspace }}/overlay/sbin
-          cp target/riscv64gc-unknown-linux-gnu/release/init ${{ github.workspace }}/overlay/sbin/init
+          cp target/riscv64gc-unknown-linux-musl/release/init ${{ github.workspace }}/overlay/sbin/init
           ln -sf sbin/init ${{ github.workspace }}/overlay/init
 
       - name: Inject APK Package Manager
