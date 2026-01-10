@@ -1,10 +1,10 @@
-name: Build Onish-OS v0.9
+name: Build Onish-OS v1.0
 
 on:
   workflow_dispatch:
     inputs:
       use_incremental:
-        description: 'Use incremental build (make)?'
+        description: 'Use incremental build?'
         required: true
         default: 'yes'
         type: choice
@@ -31,7 +31,32 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # SMART CACHING: Key changes if your onish_os.config changes!
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config build-essential ninja-build automake autoconf \
+          libtool wget curl git gcc libssl-dev bc squashfs-tools jq scons parallel tree \
+          device-tree-compiler python3-pip python3-setuptools fakeroot rsync dosfstools \
+          bison flex libncurses-dev u-boot-tools file expect mtools genext2fs
+
+      - name: Build Your Rust Init
+        run: |
+          # Use the Rust code already in your root directory
+          rustup target add riscv64gc-unknown-linux-musl
+          cargo build --release --target riscv64gc-unknown-linux-musl
+          
+          # Create the overlay and move your init to the top level
+          mkdir -p ${{ github.workspace }}/overlay/sbin
+          cp target/riscv64gc-unknown-linux-gnu/release/init ${{ github.workspace }}/overlay/sbin/init
+          ln -sf sbin/init ${{ github.workspace }}/overlay/init
+
+      - name: Inject APK Package Manager
+        run: |
+          mkdir -p ${{ github.workspace }}/overlay/usr/bin
+          # Static APK for RISC-V allows Onish-OS to install software later
+          curl -L https://gitlab.alpinelinux.org/api/v4/projects/5/packages/generic/v2.14.0/riscv64/apk.static -o ${{ github.workspace }}/overlay/usr/bin/apk
+          chmod +x ${{ github.workspace }}/overlay/usr/bin/apk
+
       - name: Cache Buildroot
         uses: actions/cache@v4
         with:
@@ -43,17 +68,6 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('onish_os.config') }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('onish_os.config') }}-
-            ${{ runner.os }}-${{ matrix.target }}-
-
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config build-essential ninja-build automake autoconf \
-          libtool wget curl git gcc libssl-dev bc squashfs-tools jq scons parallel tree \
-          device-tree-compiler python3-pip python3-setuptools fakeroot rsync dosfstools \
-          bison flex libncurses-dev u-boot-tools file expect mtools dosfstools
-
-      # ... [Your Rust Init & APK Injection steps stay exactly the same here] ...
 
       - name: Build Full OS
         run: |
@@ -63,30 +77,18 @@ jobs:
           if [ "${{ matrix.target }}" == "qemu" ]; then
             [ ! -d buildroot ] && git clone https://github.com/buildroot/buildroot.git --depth=1 --branch=2024.02.x
             cd buildroot
-            
-            # Use merge_config.sh to combine the base config + your fragment
-            # This is way safer than manual 'echo'
-            ./support/kconfig/merge_config.sh -m \
-                configs/qemu_riscv64_virt_defconfig \
-                ../onish_os.config
-            
-            # Force the overlay path to be the current workspace
+            ./support/kconfig/merge_config.sh -m configs/qemu_riscv64_virt_defconfig ../onish_os.config
             echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> .config
-            
             make olddefconfig
             make -j$(nproc)
             cp output/images/Image "$OUTPUT_DIR/"
             cp output/images/rootfs.ext2 "$OUTPUT_DIR/"
-            
           else
             [ ! -d duo-buildroot-sdk ] && git clone https://github.com/milkv-duo/duo-buildroot-sdk.git --depth=1
             cd duo-buildroot-sdk
-            
-            # Implementation for Duo SDK
             CONF_BASE="buildroot-2021.05/configs/milkv-duo_musl_riscv64_defconfig"
             cat ../onish_os.config >> $CONF_BASE
             echo "BR2_ROOTFS_OVERLAY=\"${{ github.workspace }}/overlay\"" >> $CONF_BASE
-            
             ./build.sh milkv-duo-sd
             cp out/*.img "$OUTPUT_DIR/"
           fi
@@ -94,5 +96,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: onish-os-v0.9-${{ matrix.target }}
+          name: onish-os-v1.0-${{ matrix.target }}
           path: out/
