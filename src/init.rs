@@ -92,10 +92,15 @@ fn main() {
 
     if !Path::new("/etc/apk/world").exists() {
         fs::File::create("/etc/apk/world").ok();
+
+        let repo_path = "etc/apk/repositories";
+        let content = "http://dl-cdn.alpinelinux.org/alpine/v3.20/main\n\
+                             http://dl-cdn.alpinelinux.org/alpine/v3.20/community\n";
+        fs::write(repo_path, content)?;
+        Ok(())
     }
 
-    if repair == true {
-            // Search for APK for self-repair
+    // Search for APK for self-repair
     let apk_paths = ["/bin/apk", "/usr/bin/apk", "/sbin/apk"];
     let mut apk_path = "/sbin/apk";
     for path in apk_paths {
@@ -106,6 +111,7 @@ fn main() {
         }
     }
 
+    if repair == true {
     if !Path::new("/etc/ssl/certs/ca-certificates.crt").exists() {
         println!("SSL missing installing now!");
         
@@ -123,6 +129,11 @@ fn main() {
         Ok(s) => if s.success() { println!("Sucessful SSL Certificates are installed.") }
         Err(e) => println!("Failed to install SSL Error {}", e),
     }
+    }
+    let update = Command::new(apk_path).arg("update").status();
+    match update {
+        Ok(s) => if s.success() { println!("Sucessfully updated database.") },
+        Err(e) => println!("Failed to update database Error: {}", e)
     }
     }
 
