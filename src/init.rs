@@ -199,6 +199,8 @@ fn main() {
             .args(["-F", "/dev/tty", "sane", "echo", "icanon"])
             .status();
 
+            libc::tcflush(libc::STDIN_FILENO, libc::TCIOFLUSH);
+
             print!("\x1b[?1049l\x1b[?25h\x1b[0m\x1b[2J\x1b[H");
             let _ = io::stdout().flush();
 
