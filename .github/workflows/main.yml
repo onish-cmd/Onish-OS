@@ -41,8 +41,10 @@ jobs:
 
       - name: Build Your Rust Init
         run: |
+          sudo apt-get install -y lld
           # Use the Rust code already in your root directory
           rustup target add riscv64gc-unknown-linux-musl
+          export RUSTFLAGS="-C linker-flavor=gcc -C linker=rust-lld"
           cargo build --release --target riscv64gc-unknown-linux-musl
           
           # Create the overlay and move your init to the top level
