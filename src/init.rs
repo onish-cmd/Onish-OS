@@ -2,7 +2,8 @@ extern crate os_utils;
 extern crate sc;
 extern crate libc;
 
-use std::fs;
+use std::{io, fs};
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -194,7 +195,13 @@ fn main() {
 
             // --- POWER MANAGEMENT ---
             // After Bash closes, we ask what to do next.
-            Command::new("/usr/bin/reset");
+            let _ = Command::new("/bin/stty")
+            .args(["-F", "/dev/tty", "sane", "echo", "icanon"])
+            .status();
+
+            print!("\x1b[?1049l\x1b[?25h\x1b[0m\x1b[2J\x1b[H");
+            let _ = io::stdout().flush();
+
             let ans = os_utils::input("\nSession Ended. reboot / shutdown / shell? ");
             let choice = ans.to_ascii_lowercase();
 
