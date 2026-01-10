@@ -95,9 +95,8 @@ fn main() {
 
         let repo_path = "etc/apk/repositories";
         let content = "http://dl-cdn.alpinelinux.org/alpine/v3.20/main\n\
-                             http://dl-cdn.alpinelinux.org/alpine/v3.20/community\n";
-        fs::write(repo_path, content)?;
-        Ok(())
+        http://dl-cdn.alpinelinux.org/alpine/v3.20/community\n";
+        fs::write(repo_path, content).expect("Failed to do setup repos");
     }
 
     // Search for APK for self-repair
@@ -195,6 +194,7 @@ fn main() {
 
             // --- POWER MANAGEMENT ---
             // After Bash closes, we ask what to do next.
+            Command::new("/usr/bin/reset");
             let ans = os_utils::input("\nSession Ended. reboot / shutdown / shell? ");
             let choice = ans.to_ascii_lowercase();
 
