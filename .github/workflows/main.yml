@@ -1,4 +1,4 @@
-name: Build Onish-OS v0.9
+name: Build Onish-OS v1.0
 on: workflow_dispatch
 
 jobs:
