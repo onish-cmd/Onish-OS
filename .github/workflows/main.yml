@@ -44,7 +44,7 @@ jobs:
           sudo apt-get install -y lld
           # Use the Rust code already in your root directory
           rustup target add riscv64gc-unknown-linux-musl
-          export RUSTFLAGS="-C linker=ld.lld -C link-arg=-static"
+          export RUSTFLAGS="-C linker=rust-lld -C target-feature=+crt-static -C link-arg=-static"
           cargo build --release --target riscv64gc-unknown-linux-musl
           
           # Create the overlay and move your init to the top level
