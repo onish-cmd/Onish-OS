@@ -199,6 +199,9 @@ fn main() {
             .args(["-F", "/dev/tty", "sane", "echo", "icanon"])
             .status();
             unsafe {
+                libc::kill(-(pid as i32), libc::SIGKILL);
+                let mut status = 0;
+                while libc::waitpid(-1, &mut status, libc::WNOHANG) > 0 {}
                 libc::tcflush(libc::STDIN_FILENO, libc::TCIOFLUSH);
             }
 
